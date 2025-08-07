@@ -36,7 +36,7 @@ Running recon commands, executing tools, and handling tasks manually one by one 
 git clone https://github.com/justakazh/ewe.git
 cd ewe
 pip install -r requirements.txt
-python3 main.py --help
+python3 ewe.py --help
 ```
 
 ---
