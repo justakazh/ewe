@@ -48,12 +48,18 @@ class TaskProcess:
         if self.args.save_json_log:
             os.makedirs(os.path.join(self.args.output, "logs"), exist_ok=True)
 
-        if self.args.json_workflow:
-            with open(self.args.json_workflow, "r") as f:
-                decode_workflow = json.load(f)
-        elif self.args.yaml_workflow:
-            with open(self.args.yaml_workflow, "r") as f:
-                decode_workflow = yaml.load(f, Loader=yaml.FullLoader)
+        if self.args.workflow:
+            with open(self.args.workflow, "r") as f:
+                content = f.read()
+                
+            if content.startswith('{'):
+                decode_workflow = json.loads(content)
+            else:
+                decode_workflow = yaml.load(content, Loader=yaml.FullLoader)
+        else:
+            print(f"[{Fore.RED}ERROR{Style.RESET_ALL}] Workflow file not found")
+            sys.exit(1)
+
         self.log_builder = self.createJsonLog(decode_workflow)
 
         self.save_log()
@@ -73,6 +79,9 @@ class TaskProcess:
             if not self.task_thread.is_alive():
                 self.clearScreen()
                 self.banner()
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Workflow: {self.log_builder['name']}")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Running for {self.args.target} ")
+                self.make_tree()
                 print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Workflow {Fore.GREEN}finished{Style.RESET_ALL}!")
                 print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Output in folder: {Fore.GREEN}{self.args.output}{Style.RESET_ALL}")
 
@@ -92,6 +101,8 @@ class TaskProcess:
             return
 
         command = self.setPlaceholder(task, parent_task)
+        
+        
         task['status'] = 'running'
         task['command'] = command
         self.save_log()
@@ -185,7 +196,9 @@ class TaskProcess:
         command = task['command']
         command = command.replace('{target}', self.args.target)
         command = command.replace('{name}', task['name'])
-        command = command.replace('{result}', os.path.join(self.args.output, task.get('result', f"{task['name']}.txt")))
+        
+        command = command.replace('{result}', self.check_result_path(task.get('result', f"{task['name']}.txt")))
+
         command = command.replace('{output_path}', self.args.output)
 
         if parent_task:
@@ -196,6 +209,17 @@ class TaskProcess:
             command = command.replace('{parent_result}', '')
 
         return command
+
+
+    def check_result_path(self, result):
+        if '/' in result:
+            dir_path = os.path.dirname(result)
+            if dir_path:
+                os.makedirs(os.path.join(self.args.output, dir_path), exist_ok=True)
+            return os.path.join(self.args.output, result)
+        else:
+            return os.path.join(self.args.output, result)
+
 
     def save_log(self):
         if self.args.save_json_log:
@@ -332,6 +356,7 @@ class TaskProcess:
                 self.clearScreen()
                 self.banner()
                 print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Using {self.log_builder['name']} Workflow")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Running for {self.args.target} ")
                 self.make_tree()
                 time.sleep(1)
         except KeyboardInterrupt:
@@ -366,6 +391,7 @@ class TaskProcess:
         return label_map.get(status.lower(), ("UNKNOWN", Fore.WHITE))
     def clearScreen(self):
         os.system("cls" if os.name == "nt" else "clear")
+    
     def banner(self):
         print(textwrap.dedent(f"""
         
@@ -383,8 +409,7 @@ https://github.com/justakazh/ewe
 def main():
     parser = argparse.ArgumentParser(description="Ewe CLI")
     parser.add_argument("-t", "--target", type=str, required=True, help="Target value")
-    parser.add_argument("-jw", "--json-workflow", type=str, help="Workflow file")
-    parser.add_argument("-yw", "--yaml-workflow", type=str, help="Workflow file")
+    parser.add_argument("-w", "--workflow", type=str, help="Workflow file")
     parser.add_argument("-o", "--output", type=str, required=True, help="Output folder")
     parser.add_argument("-sj", "--stdout-json", action="store_true", help="No stdout json")
     parser.add_argument("-iet", "--ignore-error-task", action="store_true", help="Ignore error task then process child task")
