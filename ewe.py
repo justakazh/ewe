@@ -9,8 +9,7 @@ import sys
 import textwrap
 from tabulate import tabulate
 from colorama import init, Fore, Style
-
-# Auto-reset warna terminal setiap print
+import yaml
 init(autoreset=True)
 
 
@@ -24,7 +23,6 @@ class TaskProcess:
         self.active_processes = []
         self.was_stopped = False
 
-        # Tangani sinyal agar proses bisa dihentikan dengan aman
         signal.signal(signal.SIGTERM, self.handle_sigterm)
         signal.signal(signal.SIGINT, self.handle_sigterm)
 
@@ -46,10 +44,16 @@ class TaskProcess:
 
     def main(self):
         os.makedirs(self.args.output, exist_ok=True)
-        os.makedirs(os.path.join(self.args.output, "logs"), exist_ok=True)
+        
+        if self.args.save_json_log:
+            os.makedirs(os.path.join(self.args.output, "logs"), exist_ok=True)
 
-        with open(self.args.workflow, "r") as f:
-            decode_workflow = json.load(f)
+        if self.args.json_workflow:
+            with open(self.args.json_workflow, "r") as f:
+                decode_workflow = json.load(f)
+        elif self.args.yaml_workflow:
+            with open(self.args.yaml_workflow, "r") as f:
+                decode_workflow = yaml.load(f, Loader=yaml.FullLoader)
         self.log_builder = self.createJsonLog(decode_workflow)
 
         self.save_log()
@@ -69,8 +73,8 @@ class TaskProcess:
             if not self.task_thread.is_alive():
                 self.clearScreen()
                 self.banner()
-                self.make_tree()
-                print("\n[*] Workflow finished, output in folder: ", self.args.output)
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Workflow {Fore.GREEN}finished{Style.RESET_ALL}!")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Output in folder: {Fore.GREEN}{self.args.output}{Style.RESET_ALL}")
 
     def run_task(self):
         threads = []
@@ -100,7 +104,7 @@ class TaskProcess:
 
             stdout, stderr = proc.communicate()
 
-            if not self.args.no_stdout_json:
+            if self.args.stdout_json:
                 task['stdout'] = stdout
 
             task['error'] = stderr
@@ -120,7 +124,6 @@ class TaskProcess:
             if 'proc' in locals() and proc in self.active_processes:
                 self.active_processes.remove(proc)
 
-        # Jalankan task anak jika ada
         if 'tasks' in task and isinstance(task['tasks'], list):
             if self.args.ignore_error_task:
                 self.run_child_tasks(task)
@@ -195,9 +198,10 @@ class TaskProcess:
         return command
 
     def save_log(self):
-        with self.thread_lock:
-            with open(self.log_file, "w") as f:
-                json.dump(self.log_builder, f, indent=4)
+        if self.args.save_json_log:
+            with self.thread_lock:
+                with open(self.log_file, "w") as f:
+                    json.dump(self.log_builder, f, indent=4)
 
     def createJsonLog(self, node):
         if 'tasks' in node and isinstance(node['tasks'], list):
@@ -217,7 +221,9 @@ class TaskProcess:
     # ========================
 
     def interactive_cli(self):
-        print("Interactive CLI")
+        self.clearScreen()
+        self.banner()
+        print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Interactive Mode")
         path = []
 
         while True:
@@ -235,13 +241,20 @@ class TaskProcess:
             elif input_cmd == 'help':
                 print(textwrap.dedent("""
                 > help - show help
-                > show - show task list
+                > info - show info of workflow
+                > show - show current level task list
+                > show-all - show all task list
                 > go <index> - go to task
                 > get <field> <index> - get info of task (error, stdout, status, pid, command, description, result)
                 > back - go back to parent task
                 > clear - clear screen
                 > exit - exit interactive mode
                 """))
+
+            elif input_cmd == 'info':
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Workflow: {self.log_builder['name']}")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Target: {self.args.target}")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Output: {self.args.output}")
 
             elif input_cmd == 'show':
                 tasks = current.get("tasks", [])
@@ -252,11 +265,14 @@ class TaskProcess:
                 rows = []
                 for i, t in enumerate(tasks):
                     name = t.get('name', '')
-                    status = self.color_status(t.get('status', ''))
+                    status = self.color_status(t.get('status', '').upper())
                     child_task = len(t.get('tasks', []))
                     rows.append([i, name, status, child_task])
 
-                print(tabulate(rows, headers=["No", "Name", "Status", "Child Task"], tablefmt="grid"))
+                print(tabulate(rows, headers=["No", "Name", "Status", "Subtask"], tablefmt="grid"))
+
+            elif input_cmd == 'show-all':
+                self.make_tree()
 
             elif input_cmd.startswith("go "):
                 try:
@@ -272,9 +288,9 @@ class TaskProcess:
                     field, idx = input_cmd.split()[1], int(input_cmd.split()[2])
                     tasks = current.get("tasks", [])
                     if field == 'result':
-                        print(os.path.join(self.args.output, tasks[idx].get("result", f"{tasks[idx]['name']}.txt")))
+                        print(f"[*] {field} : {os.path.join(self.args.output, tasks[idx].get('result', f'{tasks[idx]['name']}.txt'))}")
                     else:
-                        print(tasks[idx].get(field, ""))
+                        print(f"[*] {field} : {tasks[idx].get(field, '')}")
                 except:
                     print("  [!] Invalid command.")
                     continue
@@ -287,20 +303,20 @@ class TaskProcess:
             elif input_cmd == 'clear':
                 self.clearScreen()
             else:
-                print(f"  [!] Unknown command: {input_cmd}")
+                print(f"  [!] Unknown command: {input_cmd}, use 'help' to show command list")
 
     def wrap_text(self, text, width=50):
         return '\n'.join(textwrap.wrap(text, width=width))
 
     def color_status(self, status):
         color_map = {
-            'done': Fore.GREEN,
-            'running': Fore.YELLOW,
-            'error': Fore.RED,
-            'waiting': Fore.BLUE,
-            'pending': Fore.BLUE,
-            'stopped': Fore.LIGHTBLACK_EX,
-            'skipped': Fore.LIGHTBLACK_EX
+            'DONE': Fore.GREEN,
+            'RUNNING': Fore.YELLOW,
+            'ERROR': Fore.RED,
+            'WAITING': Fore.BLUE,
+            'PENDING': Fore.BLUE,
+            'STOPPED': Fore.LIGHTBLACK_EX,
+            'SKIPPED': Fore.LIGHTBLACK_EX
         }
         return color_map.get(status, '') + status + Style.RESET_ALL
 
@@ -315,9 +331,8 @@ class TaskProcess:
             while self.task_thread.is_alive():
                 self.clearScreen()
                 self.banner()
-                print("[*] Workflow Progress\n")
+                print(f"[{Fore.BLUE}INFO{Style.RESET_ALL}] Using {self.log_builder['name']} Workflow")
                 self.make_tree()
-                print("\n[*] Take your coffee and please wait..")
                 time.sleep(1)
         except KeyboardInterrupt:
             self.stop_event.set()
@@ -330,45 +345,50 @@ class TaskProcess:
         for task in tasks:
             name = task.get("name", "unknown")
             status = task.get("status", "waiting")
-            icon, color = self.get_status_icon(status)
+            label, color = self.get_status_label(status)
 
             indent_str = "  " * indent + ("└── " if indent > 0 else "")
-            print(f"{indent_str}[{icon}] {color}{name}{Style.RESET_ALL} ({self.color_status(status)})")
+            print(f"{indent_str}[{color}{label}{Style.RESET_ALL}] {name}")
 
             if "tasks" in task and isinstance(task["tasks"], list):
                 self.make_tree(task["tasks"], indent + 1)
 
-    def get_status_icon(self, status):
-        icon_map = {
-            'done': ("✓", Fore.GREEN),
-            'running': ("~", Fore.YELLOW),
-            'error': ("✗", Fore.RED),
-            'waiting': (" ", Fore.CYAN),
-            'pending': (" ", Fore.CYAN),
-            'skipped': ("-", Fore.LIGHTBLACK_EX),
-            'stopped': ("!", Fore.LIGHTBLACK_EX)
+    def get_status_label(self, status):
+        label_map = {
+            'done': ("DONE", Fore.GREEN),
+            'running': ("RUNNING", Fore.YELLOW),
+            'error': ("ERROR", Fore.RED),
+            'waiting': ("WAITING", Fore.CYAN),
+            'pending': ("PENDING", Fore.CYAN),
+            'skipped': ("SKIPPED", Fore.LIGHTBLACK_EX),
+            'stopped': ("STOPPED", Fore.LIGHTBLACK_EX)
         }
-        return icon_map.get(status, ("?", Fore.WHITE))
+        return label_map.get(status.lower(), ("UNKNOWN", Fore.WHITE))
     def clearScreen(self):
         os.system("cls" if os.name == "nt" else "clear")
     def banner(self):
-        print(textwrap.dedent("""
-           _____      ______
-          / __/ | /| / / __/
-         / _/ | |/ |/ / _/  
-        /___/ |__/|__/___/  
-     Execution Workflow Engine
-          @justakazh
+        print(textwrap.dedent(f"""
+        
+____________       ___________
+___  ____/_ |     / /__  ____/
+__  __/  __ | /| / /__  __/   
+_  /___  __ |/ |/ / _  /___   
+/_____/  ____/|__/  /_____/   
+Execution Workflow Engine
+https://github.com/justakazh/ewe
+        
         """))
 
 
 def main():
     parser = argparse.ArgumentParser(description="Ewe CLI")
     parser.add_argument("-t", "--target", type=str, required=True, help="Target value")
-    parser.add_argument("-w", "--workflow", type=str, required=True, help="Workflow JSON file")
+    parser.add_argument("-jw", "--json-workflow", type=str, help="Workflow file")
+    parser.add_argument("-yw", "--yaml-workflow", type=str, help="Workflow file")
     parser.add_argument("-o", "--output", type=str, required=True, help="Output folder")
+    parser.add_argument("-sj", "--stdout-json", action="store_true", help="No stdout json")
     parser.add_argument("-iet", "--ignore-error-task", action="store_true", help="Ignore error task then process child task")
-    parser.add_argument("-njs", "--no-stdout-json", action="store_true", help="No stdout json")
+    parser.add_argument("-sjl", "--save-json-log", action="store_true", help="Save json log")
     parser.add_argument("-i", "--interactive", action="store_true", help="Interactive mode")
     parser.add_argument("-s", "--silent", action="store_true", help="Silent mode")
     args = parser.parse_args()
