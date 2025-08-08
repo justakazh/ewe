@@ -50,20 +50,15 @@ usage: ewe-cli.py [-h] -t TARGET [-w WORKFLOW] -o OUTPUT [-sj] [-iet] [-sjl] [-i
 Ewe CLI
 
 options:
-  -h, --help            show this help message and exit
-  -t TARGET, --target TARGET
-                        Target value
-  -w WORKFLOW, --workflow WORKFLOW
-                        Workflow file
-  -o OUTPUT, --output OUTPUT
-                        Output folder
-  -sj, --stdout-json    No stdout json
-  -iet, --ignore-error-task
-                        Ignore error task then process child task
-  -sjl, --save-json-log
-                        Save json log
-  -i, --interactive     Interactive mode
-  -s, --silent          Silent mode
+  -h, --help (show this help message and exit)
+  -t TARGET, --target TARGET (Target value)
+  -w WORKFLOW, --workflow WORKFLOW (Workflow file)
+  -o OUTPUT, --output OUTPUT (Output folder)
+  -sj, --stdout-json    (stdout json)
+  -iet, --ignore-error-task (Ignore error task then process child task)
+  -sjl, --save-json-log (Save json log)
+  -i, --interactive     (Interactive mode)
+  -s, --silent          (Silent mode)
 ```
 
 ### Interactive Mode Commands
