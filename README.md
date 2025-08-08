@@ -50,8 +50,7 @@ Usage: main.py [options]
 Options:
   -h, --help              Show help message and exit
   -t, --target            Target value
-  -jw, --json-workflow    JSON workflow file
-  -yw, --yaml-workflow    YAML workflow file
+  -w, --workflow    Workflow file
   -o, --output            Output folder
   -sj, --stdout-json      Disable stdout json output
   -iet, --ignore-error-task  Continue child task even if parent failed
