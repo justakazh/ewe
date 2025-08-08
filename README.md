@@ -45,18 +45,25 @@ python3 ewe.py --help
 
 ### CLI Options
 ```bash
-Usage: main.py [options]
+usage: ewe-cli.py [-h] -t TARGET [-w WORKFLOW] -o OUTPUT [-sj] [-iet] [-sjl] [-i] [-s]
 
-Options:
-  -h, --help              Show help message and exit
-  -t, --target            Target value
-  -w, --workflow    Workflow file
-  -o, --output            Output folder
-  -sj, --stdout-json      Disable stdout json output
-  -iet, --ignore-error-task  Continue child task even if parent failed
-  -sjl, --save-json-log   Save task log in JSON file
-  -i, --interactive       Enable interactive CLI mode
-  -s, --silent            Run silently (no CLI interaction)
+Ewe CLI
+
+options:
+  -h, --help            show this help message and exit
+  -t TARGET, --target TARGET
+                        Target value
+  -w WORKFLOW, --workflow WORKFLOW
+                        Workflow file
+  -o OUTPUT, --output OUTPUT
+                        Output folder
+  -sj, --stdout-json    No stdout json
+  -iet, --ignore-error-task
+                        Ignore error task then process child task
+  -sjl, --save-json-log
+                        Save json log
+  -i, --interactive     Interactive mode
+  -s, --silent          Silent mode
 ```
 
 ### Interactive Mode Commands
